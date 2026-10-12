@@ -66,9 +66,16 @@ export function connectSsh(target: SshTarget, hostKeys: HostKeyStore, timeoutMs 
       },
     };
 
-    client.once('ready', () => resolve(client));
-    client.once('error', (err: Error & { level?: string; code?: string }) => {
+    let settled = false;
+    client.once('ready', () => {
+      settled = true;
+      resolve(client);
+    });
+    // 연결된 뒤에 생기는 오류(경유지 끊김 등)도 계속 받아야 한다. 정리는 'close'에서 한다.
+    client.on('error', (err: Error & { level?: string; code?: string }) => {
       client.end();
+      if (settled) return;
+      settled = true;
       if (hostKeyProblem) return reject(hostKeyProblem);
       if (err.level === 'client-authentication') {
         return reject(

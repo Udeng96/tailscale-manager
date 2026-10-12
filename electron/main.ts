@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import { DATA_DIR, importUlsanConnect, loadConfig, saveConfig } from './core/config';
 import { Services } from './core/services';
@@ -6,6 +6,17 @@ import { toApiError } from './core/ssh';
 import { getStatus, setRunning } from './core/tailscale';
 import { findDeepLinkArg, parseDeepLink, SCHEME } from './deeplink';
 import type { AppConfig, DeepLink, Result } from './shared';
+
+// 네트워크 연결이 끊겨서 생기는 오류는 각 연결 상태로 화면에 표시되므로 앱을 멈추지 않는다
+const NETWORK_ERRORS = new Set(['ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH']);
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (err.code && NETWORK_ERRORS.has(err.code)) {
+    console.warn('[network]', err.code, err.message);
+    return;
+  }
+  console.error(err);
+  dialog.showErrorBox('오류', err.stack ?? String(err));
+});
 
 let config: AppConfig = loadConfig();
 const services = new Services(DATA_DIR, () => config);

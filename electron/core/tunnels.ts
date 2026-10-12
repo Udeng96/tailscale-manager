@@ -118,12 +118,18 @@ export class TunnelManager extends EventEmitter {
     const sockets = new Set<net.Socket>();
     const server = net.createServer((sock) => {
       sockets.add(sock);
+      // DB 프로그램이 접속을 RST로 끊어도(ECONNRESET) 앱 전체가 죽지 않도록 바로 처리기를 단다
+      sock.on('error', () => sock.destroy());
       sock.on('close', () => sockets.delete(sock));
       gw.forwardOut('127.0.0.1', sock.remotePort ?? 0, t.host, t.port, (err, stream) => {
-        if (err) return sock.destroy();
+        if (err || sock.destroyed) {
+          stream?.destroy();
+          return sock.destroy();
+        }
         sock.pipe(stream).pipe(sock);
         stream.on('error', () => sock.destroy());
-        sock.on('error', () => stream.destroy());
+        sock.on('close', () => stream.destroy());
+        stream.on('close', () => sock.destroy());
       });
     });
     return new Promise((resolve, reject) => {

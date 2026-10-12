@@ -13,6 +13,7 @@ let sshServer: Server;
 let sshPort = 0;
 let pgServer: net.Server;
 let pgPort = 0;
+const sshConnections = new Set<net.Socket>();
 
 beforeAll(async () => {
   const hostKey = utils.generateKeyPairSync('ed25519').private;
@@ -29,6 +30,11 @@ beforeAll(async () => {
       });
     });
     client.on('error', () => {});
+  });
+  // ssh2 Server의 'connection'은 클라이언트 객체라서 안쪽 net.Server에서 TCP 소켓을 받는다
+  (sshServer as unknown as { _srv: net.Server })._srv.on('connection', (sock: net.Socket) => {
+    sshConnections.add(sock);
+    sock.on('close', () => sshConnections.delete(sock));
   });
   await new Promise<void>((r) => sshServer.listen(0, '127.0.0.1', r));
   sshPort = (sshServer.address() as net.AddressInfo).port;
@@ -116,5 +122,33 @@ describe('tunnel', () => {
     await expect(svc.tunnels.start('db', 'pw')).rejects.toMatchObject({ code: 'PORT_IN_USE' });
     svc.tunnels.stopAll();
     blocker.close();
+  });
+});
+
+describe('연결 끊김', () => {
+  it('로컬 접속이 RST로 끊기거나 경유지 연결이 끊겨도 앱이 죽지 않는다', async () => {
+    const { svc, config } = setup();
+    config.tunnels[0].local = await freePort();
+    try {
+      await svc.tunnels.start('db', 'pw');
+    } catch (e) {
+      const err = e as { fingerprint: string; hostKeyId: string };
+      svc.hostKeys.trust(err.hostKeyId, err.fingerprint);
+    }
+    await svc.tunnels.start('db', 'pw');
+
+    // DataGrip 등이 접속하자마자 RST로 끊는 경우
+    for (let i = 0; i < 5; i++) {
+      const s = net.connect(config.tunnels[0].local, '127.0.0.1');
+      await new Promise<void>((r) => s.on('connect', () => r()));
+      s.resetAndDestroy();
+    }
+    await new Promise((r) => setTimeout(r, 200));
+
+    // 경유지 쪽 TCP 연결이 갑자기 끊기는 경우
+    for (const c of sshConnections) c.destroy();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(svc.tunnels.snapshot().tunnels[0].phase).toBe('error');
+    expect(svc.tunnels.snapshot().gateway.connected).toBe(false);
   });
 });
