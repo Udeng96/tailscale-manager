@@ -16,7 +16,7 @@
 - 외부 실행 링크 `tailscale-manager://upload?file=...&server=...` 수신 (업로드 자체는 3단계)
 
 ## 실행
-Node 20.19 이상이 필요합니다.
+Node 20.19 이상이 필요합니다. nvm을 쓰면 폴더에서 `nvm use`로 맞출 수 있습니다 (`.nvmrc` = 22).
 
 ```bash
 npm install
