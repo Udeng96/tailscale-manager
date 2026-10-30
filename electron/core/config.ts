@@ -17,20 +17,20 @@ export const ULSAN_CONNECT_PATH = path.join(
 
 export function defaultConfig(): AppConfig {
   return {
-    gateway: { name: '울산 Windows PC (desktop-vvtm95n)', host: '100.115.250.35', port: 22, user: 'user' },
+    gateway: { name: 'Example connection 1', host: '203.0.113.3', port: 22, user: 'demo-user' },
     tunnels: [
       {
-        id: 'db-main',
-        name: '울산 운영 DB',
-        host: '10.10.11.100',
+        id: 'db-primary',
+        name: 'Example connection 2',
+        host: '203.0.113.1',
         port: 5432,
         local: 15432,
         user: '',
         kind: 'db',
-        database: '2026_ulsan',
-        dbUser: 'rino_sos',
+        database: 'demo_database',
+        dbUser: 'demo-db-user',
       },
-      { id: 'db-vendor', name: '업체 DB', host: '10.10.11.201', port: 15431, local: 15433, user: '', kind: 'db' },
+      { id: 'db-secondary', name: 'Example connection 3', host: '203.0.113.2', port: 15431, local: 15433, user: '', kind: 'db' },
     ],
   };
 }

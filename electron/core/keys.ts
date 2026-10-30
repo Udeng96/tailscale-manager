@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,9 +30,19 @@ export class KeyStore {
   /** 이 앱 전용 ed25519 키를 만든다. 이미 있으면 그대로 둔다. */
   generate(): KeyStatus {
     if (this.status().exists) return this.status();
-    const pair = utils.generateKeyPairSync('ed25519', { comment: `tailscale-manager@${os.hostname()}` });
+    const pair = utils.generateKeyPairSync('ed25519', { comment: `tailscale-manager@${os.hostname().replace(/[^A-Za-z0-9_.-]/g, '_') || 'localhost'}` });
     fs.mkdirSync(path.dirname(this.privatePath), { recursive: true, mode: 0o700 });
-    fs.writeFileSync(this.privatePath, pair.private, { mode: 0o600 });
+    // Create and restrict the file before writing any private key material.
+    fs.writeFileSync(this.privatePath, '', { mode: 0o600, flag: 'wx' });
+    if (process.platform === 'win32') {
+      const identity = execFileSync('whoami', ['/user', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true });
+      const sid = identity.match(/S-1-[0-9-]+/)?.[0];
+      if (!sid) throw new Error('Cannot determine private key owner');
+      execFileSync('icacls', [this.privatePath, '/inheritance:r', '/grant:r', `*${sid}:F`], { windowsHide: true });
+    } else {
+      fs.chmodSync(this.privatePath, 0o600);
+    }
+    fs.writeFileSync(this.privatePath, pair.private);
     fs.writeFileSync(this.publicPath, pair.public + '\n', { mode: 0o644 });
     return this.status();
   }
